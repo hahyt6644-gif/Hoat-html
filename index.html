@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Opening Smart Track ITZ...</title>
+    <title>Opening ITZ Player...</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -16,7 +16,6 @@
             height: 100vh;
             text-align: center;
         }
-        /* Loading Overlay UI */
         #redirectStatusOverlay {
             background-color: #1a1a1a;
             padding: 30px;
@@ -24,220 +23,65 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.5);
             max-width: 90%;
             width: 350px;
-            transition: opacity 0.3s ease;
         }
         .badge { background: #007bff; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; display: inline-block; }
-        h2 { margin: 10px 0; font-size: 22px; }
+        h2 { margin: 10px 0; font-size: 22px; color: #fff; }
         p { color: #aaaaaa; font-size: 14px; line-height: 1.5; margin-bottom: 10px; }
         .progress-bar { background: #333; height: 6px; border-radius: 3px; overflow: hidden; margin: 20px 0; }
-        #redirectStatusProgressFill { background: #007bff; height: 100%; width: 0%; transition: width 0.1s linear; }
-        .btn { background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; margin-top: 10px; }
+        #redirectStatusProgressFill { background: #007bff; height: 100%; width: 0%; transition: width 1.5s ease-in-out; }
+        .btn { background: #007bff; color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: block; margin-top: 20px; font-size: 16px; transition: background 0.2s;}
+        .btn:active { background: #0056b3; }
     </style>
 </head>
 <body>
 
     <div id="redirectStatusOverlay">
-        <span id="redirectStatusBadge" class="badge">Initializing</span>
-        <h2 id="redirectStatusTitle">Loading Player</h2>
-        <p id="redirectStatusSubtitle">Preparing to launch the app...</p>
+        <span class="badge">Android Handoff</span>
+        <h2>Opening ITZ Player</h2>
+        <p>new verification video directly inside the Smart Track ITZ app.</p>
         
         <div class="progress-bar">
             <div id="redirectStatusProgressFill"></div>
         </div>
         
-        <p id="redirectStatusNote" style="font-size: 12px; color: #777;"></p>
-        <a id="redirectStatusAction" href="#" class="btn" hidden>Open App Now</a>
+        <p style="font-size: 12px; color: #777;">If the app does not open automatically in a few seconds, tap the button below.</p>
+        
+        <a id="actionBtn" href="#" class="btn">Open App Manually</a>
     </div>
 
     <script>
-        let watchDuration = 0;
-        
-        // 1. UPDATED: Points to your app instead of SmartBuy
-        const videoPlayApps = [{
-            "name": "Smart Track ITZ",
-            "scheme": "itz",
-            "package_android": "com.smart.track.itz",
-            "play_store_url": "https://play.google.com/store/apps/details?id=com.smart.track.itz",
-            "app_store_url": ""
-        }];
-        
-        const defaultAppIndex = 0;
-        const redirectStatusState = { elements: null, progressFrame: null, hideTimer: null };
+        // 1. Grab the video link from the URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const rawUrl = urlParams.get('url');
 
-        function getRedirectStatusElements() {
-            if (!redirectStatusState.elements) {
-                redirectStatusState.elements = {
-                    overlay: document.getElementById('redirectStatusOverlay'),
-                    badge: document.getElementById('redirectStatusBadge'),
-                    title: document.getElementById('redirectStatusTitle'),
-                    subtitle: document.getElementById('redirectStatusSubtitle'),
-                    note: document.getElementById('redirectStatusNote'),
-                    progressFill: document.getElementById('redirectStatusProgressFill'),
-                    action: document.getElementById('redirectStatusAction')
-                };
-            }
-            return redirectStatusState.elements;
+        if (rawUrl) {
+            // 2. Encode the Terabox link
+            const safeUrl = encodeURIComponent(rawUrl);
+
+            // 3. The Pure Android Intent
+            // This is the cleanest possible way to tell Chrome to open an app.
+            // No Play Store fallback, no tracking garbage. Just direct app launch.
+            const intentUrl = "intent://play?url=" + safeUrl + "#Intent;scheme=itz;package=com.smart.track.itz;end;";
+
+            // 4. Attach it to the button
+            const actionBtn = document.getElementById('actionBtn');
+            actionBtn.href = intentUrl;
+
+            // 5. Animate the progress bar
+            setTimeout(() => {
+                document.getElementById('redirectStatusProgressFill').style.width = "100%";
+            }, 100);
+
+            // 6. Attempt automatic redirect after 1.5 seconds
+            setTimeout(() => {
+                // We use button click instead of window.location to bypass Chrome's popup blocker
+                actionBtn.click();
+            }, 1500);
+
+        } else {
+            document.querySelector('#redirectStatusOverlay').innerHTML = "<h3 style='color:#ff4444;'>Error</h3><p>No video URL was provided.</p>";
         }
-
-        function safeNavigate(url, useReplace = false) {
-            if (!url) return;
-            if (useReplace && typeof window.location.replace === 'function') {
-                window.location.replace(url);
-                return;
-            }
-            window.location.href = url;
-        }
-
-        function stopRedirectProgressAnimation() {
-            if (redirectStatusState.progressFrame) {
-                cancelAnimationFrame(redirectStatusState.progressFrame);
-                redirectStatusState.progressFrame = null;
-            }
-        }
-
-        function setRedirectProgress(percent) {
-            const ui = getRedirectStatusElements();
-            const clamped = Math.max(0, Math.min(100, percent));
-            ui.progressFill.style.width = clamped + '%';
-        }
-
-        function animateRedirectProgress(durationMs, holdPercent = 84) {
-            stopRedirectProgressAnimation();
-            const start = performance.now();
-            const step = (now) => {
-                const elapsed = now - start;
-                const progress = Math.min(holdPercent, (elapsed / durationMs) * holdPercent);
-                setRedirectProgress(progress);
-                if (progress < holdPercent) {
-                    redirectStatusState.progressFrame = requestAnimationFrame(step);
-                }
-            };
-            redirectStatusState.progressFrame = requestAnimationFrame(step);
-        }
-
-        function showRedirectOverlay(options) {
-            const ui = getRedirectStatusElements();
-            const actionText = options.action === 'download' ? 'download' : 'playback';
-            clearTimeout(redirectStatusState.hideTimer);
-            stopRedirectProgressAnimation();
-            ui.badge.textContent = `${options.platformLabel} handoff`;
-            ui.title.textContent = `Opening ${options.appName}`;
-            ui.subtitle.textContent = `Trying to continue this ${actionText} inside ${options.appName}.`;
-            ui.note.textContent = `If ${options.appName} does not respond, we will send you to the ${options.storeLabel}.`;
-            ui.action.hidden = true;
-            ui.action.removeAttribute('href');
-            ui.action.textContent = `Open ${options.storeLabel} Now`;
-            ui.overlay.hidden = false;
-            setRedirectProgress(10);
-            animateRedirectProgress(options.timeoutMs || 2000);
-        }
-
-        function markRedirectOpened(appName) {
-            const ui = getRedirectStatusElements();
-            clearTimeout(redirectStatusState.hideTimer);
-            stopRedirectProgressAnimation();
-            ui.badge.textContent = 'App detected';
-            ui.title.textContent = `Switching to ${appName}`;
-            ui.subtitle.textContent = 'The app responded on this device.';
-            ui.note.textContent = 'If the app does not appear, return here and tap once more.';
-            ui.action.hidden = true;
-            setRedirectProgress(100);
-        }
-
-        function showRedirectFallback(appName, storeLabel, storeUrl) {
-            const ui = getRedirectStatusElements();
-            clearTimeout(redirectStatusState.hideTimer);
-            stopRedirectProgressAnimation();
-            ui.badge.textContent = 'Store fallback';
-            ui.title.textContent = `${appName} did not respond`;
-            ui.subtitle.textContent = `Redirecting you to the ${storeLabel} now.`;
-            ui.note.textContent = storeUrl
-                ? `If nothing happens in a moment, use the button below to open the ${storeLabel} manually.`
-                : `The ${storeLabel} link is not configured yet.`;
-            if (storeUrl) {
-                ui.action.hidden = false;
-                ui.action.href = storeUrl;
-                ui.action.textContent = `Open ${storeLabel} Now`;
-            } else {
-                ui.action.hidden = true;
-                ui.action.removeAttribute('href');
-            }
-            setRedirectProgress(100);
-        }
-
-        function openInApp(appIndex) {
-            appIndex = parseInt(appIndex, 10) || 0;
-            const app = videoPlayApps[appIndex] || videoPlayApps[0];
-            if (!app) return;
-            
-            // 2. UPDATED: Dynamically fetch the URL from your web link
-            const urlParams = new URLSearchParams(window.location.search);
-            const rawUrl = urlParams.get('url');
-            
-            if (!rawUrl) {
-                const ui = getRedirectStatusElements();
-                ui.title.textContent = "Error";
-                ui.subtitle.textContent = "No video link found in the URL.";
-                return;
-            }
-
-            const appPackage = app.package_android || '';
-            const playStoreUrl = app.play_store_url || '';
-            const appName = app.name || 'App';
-            
-            const isAndroid = /Android/i.test(navigator.userAgent);
-            const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-            if (!isMobile) {
-                if (confirm('This feature is available on our mobile app. Would you like to download it?')) {
-                    window.open(playStoreUrl, '_blank');
-                }
-                return;
-            }
-            
-            let appOpened = false;
-            let redirectTimeout = null;
-            const appCheckTimeout = 2100;
-            
-            const handleSuccess = () => {
-                appOpened = true;
-                if (redirectTimeout) clearTimeout(redirectTimeout);
-                markRedirectOpened(appName);
-            };
-            
-            window.addEventListener('blur', handleSuccess, { once: true });
-            document.addEventListener('visibilitychange', () => { if (document.hidden) handleSuccess(); }, { once: true });
-            window.addEventListener('pagehide', handleSuccess, { once: true });
-            
-            showRedirectOverlay({ appName, action: 'play', platformLabel: 'Android', storeLabel: 'Play Store', timeoutMs: appCheckTimeout });
-            
-            if (isAndroid) {
-                // 3. UPDATED: Correct Intent URL for your Flutter app scheme (itz://)
-                const safeUrl = encodeURIComponent(rawUrl);
-                const intentUrl = `intent://play?url=${safeUrl}#Intent;scheme=itz;package=${appPackage};S.browser_fallback_url=${encodeURIComponent(playStoreUrl)};end;`;
-                
-                try {
-                    window.location.href = intentUrl;
-                } catch (e) {
-                    showRedirectFallback(appName, 'Play Store', playStoreUrl);
-                    setTimeout(() => safeNavigate(playStoreUrl, true), 220);
-                    return;
-                }
-                
-                redirectTimeout = setTimeout(() => {
-                    if (!appOpened && !document.hidden) {
-                        showRedirectFallback(appName, 'Play Store', playStoreUrl);
-                        // Since your app is not on the Play Store yet, we won't auto-redirect there to prevent errors.
-                    }
-                }, appCheckTimeout);
-            }
-        }
-
-        // Auto-run the function as soon as the page loads
-        window.onload = () => {
-            openInApp(0);
-        };
     </script>
+
 </body>
-  </html>
-  
+</html>
