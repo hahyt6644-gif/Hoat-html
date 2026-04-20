@@ -1,115 +1,87 @@
-<?php
-header('Content-Type: application/json');
-header('Access-Control-Allow-Origin: *');
-
-$username = $_GET['username'] ?? 'mrbeast';
-
-// 1. MASSIVE PROXY POOL (9 Total Proxies)
-$proxies = [
-    // --- UAE OwlProxies (SOCKS5) ---
-    ['id' => 'UAE_SOCKS_946', 'host' => 'change4.owlproxy.com', 'port' => 7778, 'user' => 'D1j47nCoeV40_custom_zone_AE_st__city_sid_94694348_time_5', 'pass' => '2537493', 'type' => CURLPROXY_SOCKS5_HOSTNAME],
-    ['id' => 'UAE_SOCKS_098', 'host' => 'change4.owlproxy.com', 'port' => 7778, 'user' => 'D1j47nCoeV40_custom_zone_AE_st__city_sid_47987098_time_5', 'pass' => '2537493', 'type' => CURLPROXY_SOCKS5_HOSTNAME],
-
-    // --- NEW US OwlProxies (SOCKS5) ---
-    ['id' => 'US_SOCKS_3512', 'host' => 'change4.owlproxy.com', 'port' => 7778, 'user' => 'UwQYjY8pLd50_custom_zone_US_st__city_sid_04703512_time_5', 'pass' => '2537559', 'type' => CURLPROXY_SOCKS5_HOSTNAME],
-    ['id' => 'US_SOCKS_9568', 'host' => 'change4.owlproxy.com', 'port' => 7778, 'user' => 'UwQYjY8pLd50_custom_zone_US_st__city_sid_04379568_time_5', 'pass' => '2537559', 'type' => CURLPROXY_SOCKS5_HOSTNAME],
-    ['id' => 'US_SOCKS_5448', 'host' => 'change4.owlproxy.com', 'port' => 7778, 'user' => 'UwQYjY8pLd50_custom_zone_US_st__city_sid_66285448_time_5', 'pass' => '2537559', 'type' => CURLPROXY_SOCKS5_HOSTNAME],
-    ['id' => 'US_SOCKS_5858', 'host' => 'change4.owlproxy.com', 'port' => 7778, 'user' => 'UwQYjY8pLd50_custom_zone_US_st__city_sid_78495858_time_5', 'pass' => '2537559', 'type' => CURLPROXY_SOCKS5_HOSTNAME],
-    ['id' => 'US_SOCKS_6448', 'host' => 'change4.owlproxy.com', 'port' => 7778, 'user' => 'UwQYjY8pLd50_custom_zone_US_st__city_sid_90206448_time_5', 'pass' => '2537559', 'type' => CURLPROXY_SOCKS5_HOSTNAME],
-
-    // --- US HTTP Proxies ---
-    ['id' => 'US_HTTP_PURE', 'host' => 'px015601.pointtoserver.com', 'port' => 10780, 'user' => 'purevpn0s4863210', 'pass' => 'cq4naylqyfc1', 'type' => CURLPROXY_HTTP],
-    ['id' => 'US_HTTP_MODESTO', 'host' => '136.179.19.164', 'port' => 3128, 'user' => 'harishankarchoubey', 'pass' => 'HvCjWdoIrK6szj8v', 'type' => CURLPROXY_HTTP]
-];
-
-// Shuffle to ensure we use different IPs every request
-shuffle($proxies);
-
-$finalData = null;
-$workingProxyId = "None";
-$attempts = [];
-
-// 2. RETRY LOOP
-foreach ($proxies as $proxy) {
-    $url = "https://www.instagram.com/api/v1/users/web_profile_info/?username=" . urlencode($username);
-    
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 12);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    
-    // Set Proxy
-    curl_setopt($ch, CURLOPT_PROXY, $proxy['host']);
-    curl_setopt($ch, CURLOPT_PROXYPORT, $proxy['port']);
-    curl_setopt($ch, CURLOPT_PROXYUSERPWD, $proxy['user'] . ":" . $proxy['pass']);
-    curl_setopt($ch, CURLOPT_PROXYTYPE, $proxy['type']);
-    
-    // Headers (Using Mobile Android String for better guest access)
-    curl_setopt($ch, CURLOPT_HTTPHEADER, [
-        "User-Agent: Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36",
-        "X-IG-App-ID: 1217981644879628", // Android App ID (Higher Trust than Web)
-        "X-ASBD-ID: 129477",
-        "Accept: */*",
-        "X-Requested-With: XMLHttpRequest",
-        "Referer: https://www.instagram.com/$username/"
-    ]);
-    
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $curlError = curl_error($ch);
-    curl_close($ch);
-    
-    if ($httpCode === 200) {
-        $decoded = json_decode($response, true);
-        if (isset($decoded['data']['user'])) {
-            $finalData = $decoded;
-            $workingProxyId = $proxy['id'];
-            break; 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opening ITZ Player...</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #0f0f0f;
+            color: #ffffff;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
         }
-    }
-    $attempts[] = ["id" => $proxy['id'], "code" => $httpCode, "error" => $curlError];
-}
-
-// 3. EXTRACTION
-if ($finalData) {
-    $user = $finalData['data']['user'];
-    $reels = [];
-    $seen = [];
-    
-    $sources = [
-        $user['edge_clips_video_timeline'] ?? null,
-        $user['edge_owner_to_timeline_media'] ?? null
-    ];
-    
-    foreach ($sources as $source) {
-        if (!$source) continue;
-        foreach ($source['edges'] as $edge) {
-            $node = $edge['node'];
-            if ($node['is_video'] && !isset($seen[$node['shortcode']])) {
-                $reels[] = [
-                    'url' => "https://www.instagram.com/reels/" . $node['shortcode'] . "/",
-                    'timestamp' => $node['taken_at_timestamp']
-                ];
-                $seen[$node['shortcode']] = true;
-            }
+        #redirectStatusOverlay {
+            background-color: #1a1a1a;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            max-width: 90%;
+            width: 350px;
         }
-    }
-    
-    usort($reels, function($a, $b) { return $b['timestamp'] <=> $a['timestamp']; });
+        .badge { background: #007bff; color: #fff; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; text-transform: uppercase; margin-bottom: 15px; display: inline-block; }
+        h2 { margin: 10px 0; font-size: 22px; color: #fff; }
+        p { color: #aaaaaa; font-size: 14px; line-height: 1.5; margin-bottom: 10px; }
+        .progress-bar { background: #333; height: 6px; border-radius: 3px; overflow: hidden; margin: 20px 0; }
+        #redirectStatusProgressFill { background: #007bff; height: 100%; width: 0%; transition: width 1.5s ease-in-out; }
+        .btn { background: #007bff; color: white; padding: 14px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: block; margin-top: 20px; font-size: 16px; transition: background 0.2s;}
+        .btn:active { background: #0056b3; }
+    </style>
+</head>
+<body>
 
-    echo json_encode([
-        "status" => "success",
-        "username" => $username,
-        "proxy_used" => $workingProxyId,
-        "total_found" => count($reels),
-        "reels" => array_column($reels, 'url')
-    ], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES);
+    <div id="redirectStatusOverlay">
+        <span class="badge">Android Handoff</span>
+        <h2>Opening ITZ Player</h2>
+        <p>new verification video directly inside the Smart Track ITZ app.</p>
+        
+        <div class="progress-bar">
+            <div id="redirectStatusProgressFill"></div>
+        </div>
+        
+        <p style="font-size: 12px; color: #777;">If the app does not open automatically in a few seconds, tap the button below.</p>
+        
+        <a id="actionBtn" href="#" class="btn">Open App Manually</a>
+    </div>
 
-} else {
-    echo json_encode([
-        "status" => "error",
-        "message" => "All 9 proxies failed to fetch data. Instagram is likely requiring a login for this username.",
-        "debug_log" => $attempts
-    ], JSON_PRETTY_PRINT);
-}
+    <script>
+        // 1. Grab the video link from the URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const rawUrl = urlParams.get('url');
+
+        if (rawUrl) {
+            // 2. Encode the Terabox link
+            const safeUrl = encodeURIComponent(rawUrl);
+
+            // 3. The Pure Android Intent
+            // This is the cleanest possible way to tell Chrome to open an app.
+            // No Play Store fallback, no tracking garbage. Just direct app launch.
+            const intentUrl = "intent://play?url=" + safeUrl + "#Intent;scheme=itz;package=com.smart.track.itz;end;";
+
+            // 4. Attach it to the button
+            const actionBtn = document.getElementById('actionBtn');
+            actionBtn.href = intentUrl;
+
+            // 5. Animate the progress bar
+            setTimeout(() => {
+                document.getElementById('redirectStatusProgressFill').style.width = "100%";
+            }, 100);
+
+            // 6. Attempt automatic redirect after 1.5 seconds
+            setTimeout(() => {
+                // We use button click instead of window.location to bypass Chrome's popup blocker
+                actionBtn.click();
+            }, 1500);
+
+        } else {
+            document.querySelector('#redirectStatusOverlay').innerHTML = "<h3 style='color:#ff4444;'>Error</h3><p>No video URL was provided.</p>";
+        }
+    </script>
+
+</body>
+</html>
