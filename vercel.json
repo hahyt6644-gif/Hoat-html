@@ -1,13 +1,13 @@
 {
   "functions": {
-    "insta.php": {
+    "api/insta.php": {
       "runtime": "vercel-php@0.7.2"
     }
   },
   "routes": [
     {
       "src": "/insta.php",
-      "dest": "/insta.php"
+      "dest": "/api/insta.php"
     },
     {
       "src": "/(.*)",
