@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Video Utility Hub</title>
+    <title>Auto IG to Worker API</title>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
@@ -14,7 +14,6 @@
             min-height: 100vh;
             margin: 0;
             padding: 20px;
-            box-sizing: border-box;
         }
         .container {
             background: #ffffff;
@@ -26,17 +25,9 @@
             text-align: center;
         }
         h2 { margin-top: 0; color: #333; }
-        .section {
-            background: #fafafa;
-            border: 1px solid #ddd;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .section h3 { margin-top: 0; font-size: 16px; color: #555; }
         .input-field {
             width: 100%;
-            padding: 10px;
+            padding: 12px;
             margin-bottom: 15px;
             border: 1px solid #ccc;
             border-radius: 5px;
@@ -47,164 +38,135 @@
             background: #007bff;
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 12px 20px;
             border-radius: 5px;
             cursor: pointer;
             font-size: 16px;
             width: 100%;
-            transition: background 0.2s;
+            font-weight: bold;
         }
-        button:hover { background: #0056b3; }
         button:disabled { background: #cccccc; cursor: not-allowed; }
-        .divider { margin: 20px 0; color: #888; font-weight: bold; font-size: 14px; text-transform: uppercase; }
+        .status { margin-top: 15px; font-size: 14px; font-weight: 500; color: #555; }
         .result-box {
             margin-top: 20px;
             padding: 15px;
-            background: #e9ecef;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
             border-radius: 5px;
             display: none;
             word-break: break-all;
         }
         .result-box a {
-            color: #007bff;
+            color: #155724;
             font-weight: bold;
             text-decoration: none;
         }
-        .error { color: red; margin-top: 15px; font-size: 14px; }
+        .error { color: #721c24; background: #f8d7da; border: 1px solid #f5c6cb; padding: 10px; border-radius: 5px; margin-top: 15px; display: none; font-size: 14px;}
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>Video Utility Hub</h2>
-
-    <!-- Option 1: Instagram Fetcher -->
-    <div class="section">
-        <h3>Fetch from Instagram Reel</h3>
-        <input type="url" id="igInput" class="input-field" placeholder="Paste Instagram Reel URL here..." />
-        <button id="fetchIgBtn">Get MP4 URL</button>
-    </div>
-
-    <div class="divider">OR</div>
-
-    <!-- Option 2: Direct File Upload -->
-    <div class="section">
-        <h3>Upload Local File</h3>
-        <input type="file" id="fileInput" class="input-field" accept="video/*" />
-        <button id="uploadBtn">Upload to Worker API</button>
-    </div>
+    <h2>Auto IG Uploader</h2>
+    <p style="font-size: 14px; color: #666; margin-bottom: 20px;">Paste an Instagram Reel URL to automatically fetch and upload it to your Worker API.</p>
+    
+    <input type="url" id="igInput" class="input-field" placeholder="https://www.instagram.com/reel/..." />
+    <button id="processBtn">Process & Upload</button>
+    
+    <div id="statusText" class="status"></div>
     
     <div id="resultBox" class="result-box">
-        <p><strong>Result URL:</strong></p>
-        <a id="downloadLink" href="#" target="_blank">Link will appear here</a>
+        <p><strong>Success! Final URL:</strong></p>
+        <a id="finalLink" href="#" target="_blank">Link will appear here</a>
     </div>
-    <div id="errorMessage" class="error"></div>
+    
+    <div id="errorBox" class="error"></div>
 </div>
 
 <script>
-    // APIs
-    const UPLOAD_API_URL = "https://file-host.itz-dev.workers.dev/upload";
     const IG_API_BASE = "https://instagramdl.the-zake.workers.dev/?url=";
+    const UPLOAD_API_URL = "https://file-host.itz-dev.workers.dev/upload";
     
-    // Elements
     const igInput = document.getElementById('igInput');
-    const fetchIgBtn = document.getElementById('fetchIgBtn');
-    
-    const fileInput = document.getElementById('fileInput');
-    const uploadBtn = document.getElementById('uploadBtn');
-    
+    const processBtn = document.getElementById('processBtn');
+    const statusText = document.getElementById('statusText');
     const resultBox = document.getElementById('resultBox');
-    const downloadLink = document.getElementById('downloadLink');
-    const errorMessage = document.getElementById('errorMessage');
+    const finalLink = document.getElementById('finalLink');
+    const errorBox = document.getElementById('errorBox');
 
-    // Helper to show results
-    function showResult(url) {
-        errorMessage.textContent = "";
-        downloadLink.href = url;
-        downloadLink.textContent = "Click here to open the MP4 video";
-        resultBox.style.display = "block";
+    function updateStatus(msg) {
+        statusText.textContent = msg;
+        console.log(msg);
     }
 
-    // Helper to show errors
     function showError(msg) {
-        resultBox.style.display = "none";
-        errorMessage.textContent = msg;
+        statusText.textContent = "";
+        errorBox.textContent = msg;
+        errorBox.style.display = "block";
+        processBtn.disabled = false;
+        processBtn.textContent = "Process & Upload";
     }
 
-    // 1. Fetch Instagram Reel Logic
-    fetchIgBtn.addEventListener('click', async () => {
+    processBtn.addEventListener('click', async () => {
         const url = igInput.value.trim();
-        
-        if (!url) {
-            showError("Please paste an Instagram URL first.");
-            return;
-        }
+        if (!url) return showError("Please paste an Instagram URL.");
 
-        fetchIgBtn.disabled = true;
-        fetchIgBtn.textContent = "Fetching...";
-        showError("");
+        // Reset UI
+        errorBox.style.display = "none";
+        resultBox.style.display = "none";
+        processBtn.disabled = true;
 
         try {
-            const response = await fetch(IG_API_BASE + encodeURIComponent(url));
-            const data = await response.json();
+            // STEP 1: Get Instagram MP4 URL from your scraper
+            updateStatus("Step 1: Fetching Reel data...");
+            const igRes = await fetch(IG_API_BASE + encodeURIComponent(url));
+            const igData = await igRes.json();
 
-            // Check if success and media exists
-            if (data.success && data.data && data.data.medias) {
-                // Find the MP4 video object
-                const videoMedia = data.data.medias.find(m => m.type === 'video' && m.extension === 'mp4');
-                
-                if (videoMedia && videoMedia.url) {
-                    showResult(videoMedia.url);
-                } else {
-                    showError("Could not find an MP4 video in this Instagram link.");
-                }
-            } else {
-                showError("API failed to extract data. Make sure it's a valid public reel.");
+            if (!igData.success || !igData.data || !igData.data.medias) {
+                throw new Error("Failed to extract data from Instagram link.");
             }
-        } catch (error) {
-            console.error("IG Fetch Error:", error);
-            showError("Network error. Check browser console or API CORS settings.");
-        } finally {
-            fetchIgBtn.disabled = false;
-            fetchIgBtn.textContent = "Get MP4 URL";
-        }
-    });
 
-    // 2. Upload Local File Logic
-    uploadBtn.addEventListener('click', async () => {
-        const file = fileInput.files[0];
-        
-        if (!file) {
-            showError("Please select a file first.");
-            return;
-        }
+            const videoMedia = igData.data.medias.find(m => m.type === 'video' && m.extension === 'mp4');
+            if (!videoMedia || !videoMedia.url) {
+                throw new Error("No MP4 video found in this Reel.");
+            }
+            const mp4Url = videoMedia.url;
 
-        uploadBtn.disabled = true;
-        uploadBtn.textContent = "Uploading...";
-        showError("");
+            // STEP 2: Download the MP4 into the browser as a Blob
+            updateStatus("Step 2: Downloading video from Instagram...");
+            const videoRes = await fetch(mp4Url);
+            if (!videoRes.ok) throw new Error("Failed to download video blob (CORS or network issue).");
+            const videoBlob = await videoRes.blob();
 
-        const formData = new FormData();
-        formData.append("files[]", file);
-        formData.append("expiry", "-1");
+            // STEP 3: Upload the Blob to your Worker API
+            updateStatus("Step 3: Uploading to Worker API...");
+            const formData = new FormData();
+            formData.append("files[]", videoBlob, "reels.mp4");
+            formData.append("expiry", "-1");
 
-        try {
-            const response = await fetch(UPLOAD_API_URL, {
+            const uploadRes = await fetch(UPLOAD_API_URL, {
                 method: "POST",
                 body: formData
             });
-            const data = await response.json();
+            const uploadData = await uploadRes.json();
 
-            if (data.success && data.files && data.files.length > 0) {
-                showResult(data.files[0].url);
-            } else {
-                showError("Upload failed. Unexpected API response.");
+            if (!uploadData.success || !uploadData.files || uploadData.files.length === 0) {
+                throw new Error("Worker API rejected the upload.");
             }
+
+            // STEP 4: Display Final URL
+            updateStatus("");
+            const finalUrl = uploadData.files[0].url;
+            finalLink.href = finalUrl;
+            finalLink.textContent = finalUrl;
+            resultBox.style.display = "block";
+            
+            processBtn.disabled = false;
+            processBtn.textContent = "Process Another";
+
         } catch (error) {
-            console.error("Upload error:", error);
-            showError("Error uploading file. Check console or CORS settings.");
-        } finally {
-            uploadBtn.disabled = false;
-            uploadBtn.textContent = "Upload to Worker API";
+            console.error(error);
+            showError(error.message || "An unexpected error occurred.");
         }
     });
 </script>
