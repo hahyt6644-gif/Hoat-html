@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Worker API Uploader</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #f4f4f9;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .container {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        h2 { margin-top: 0; color: #333; }
+        .file-input { margin: 20px 0; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #cccccc; cursor: not-allowed; }
+        .result-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 5px;
+            display: none;
+            word-break: break-all;
+        }
+        .result-box a {
+            color: #007bff;
+            font-weight: bold;
+            text-decoration: none;
+        }
+        .error { color: red; margin-top: 15px; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Upload Video</h2>
+    <input type="file" id="fileInput" class="file-input" accept="video/*" />
+    <button id="uploadBtn">Upload File</button>
+    
+    <div id="resultBox" class="result-box">
+        <p><strong>Direct Link:</strong></p>
+        <a id="downloadLink" href="#" target="_blank">Link will appear here</a>
+    </div>
+    <div id="errorMessage" class="error"></div>
+</div>
+
+<script>
+    const API_URL = "https://file-host.itz-dev.workers.dev/upload";
+    
+    const fileInput = document.getElementById('fileInput');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const resultBox = document.getElementById('resultBox');
+    const downloadLink = document.getElementById('downloadLink');
+    const errorMessage = document.getElementById('errorMessage');
+
+    uploadBtn.addEventListener('click', async () => {
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            errorMessage.textContent = "Please select a file first.";
+            return;
+        }
+
+        // Reset UI
+        errorMessage.textContent = "";
+        resultBox.style.display = "none";
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = "Uploading...";
+
+        // Build FormData exactly like the curl command
+        const formData = new FormData();
+        formData.append("files[]", file);
+        formData.append("expiry", "-1");
+
+        try {
+            const response = await fetch(API_URL, {
+                method: "POST",
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success && data.files && data.files.length > 0) {
+                const fileUrl = data.files[0].url;
+                downloadLink.href = fileUrl;
+                downloadLink.textContent = fileUrl;
+                resultBox.style.display = "block";
+            } else {
+                throw new Error("Upload failed. Unexpected API response.");
+            }
+        } catch (error) {
+            console.error("Upload error:", error);
+            errorMessage.textContent = "Error uploading file. Check console or CORS settings.";
+        } finally {
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = "Upload File";
+        }
+    });
+</script>
+
+</body>
+</html>
