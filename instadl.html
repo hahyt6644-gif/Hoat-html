@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Worker API Uploader</title>
+    <title>Video Utility Hub</title>
     <style>
         body {
             font-family: system-ui, -apple-system, sans-serif;
@@ -11,8 +11,10 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
         }
         .container {
             background: #ffffff;
@@ -20,11 +22,27 @@
             border-radius: 10px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             width: 100%;
-            max-width: 400px;
+            max-width: 450px;
             text-align: center;
         }
         h2 { margin-top: 0; color: #333; }
-        .file-input { margin: 20px 0; }
+        .section {
+            background: #fafafa;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .section h3 { margin-top: 0; font-size: 16px; color: #555; }
+        .input-field {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
         button {
             background: #007bff;
             color: white;
@@ -34,9 +52,11 @@
             cursor: pointer;
             font-size: 16px;
             width: 100%;
+            transition: background 0.2s;
         }
         button:hover { background: #0056b3; }
         button:disabled { background: #cccccc; cursor: not-allowed; }
+        .divider { margin: 20px 0; color: #888; font-weight: bold; font-size: 14px; text-transform: uppercase; }
         .result-box {
             margin-top: 20px;
             padding: 15px;
@@ -56,67 +76,135 @@
 <body>
 
 <div class="container">
-    <h2>Upload Video</h2>
-    <input type="file" id="fileInput" class="file-input" accept="video/*" />
-    <button id="uploadBtn">Upload File</button>
+    <h2>Video Utility Hub</h2>
+
+    <!-- Option 1: Instagram Fetcher -->
+    <div class="section">
+        <h3>Fetch from Instagram Reel</h3>
+        <input type="url" id="igInput" class="input-field" placeholder="Paste Instagram Reel URL here..." />
+        <button id="fetchIgBtn">Get MP4 URL</button>
+    </div>
+
+    <div class="divider">OR</div>
+
+    <!-- Option 2: Direct File Upload -->
+    <div class="section">
+        <h3>Upload Local File</h3>
+        <input type="file" id="fileInput" class="input-field" accept="video/*" />
+        <button id="uploadBtn">Upload to Worker API</button>
+    </div>
     
     <div id="resultBox" class="result-box">
-        <p><strong>Direct Link:</strong></p>
+        <p><strong>Result URL:</strong></p>
         <a id="downloadLink" href="#" target="_blank">Link will appear here</a>
     </div>
     <div id="errorMessage" class="error"></div>
 </div>
 
 <script>
-    const API_URL = "https://file-host.itz-dev.workers.dev/upload";
+    // APIs
+    const UPLOAD_API_URL = "https://file-host.itz-dev.workers.dev/upload";
+    const IG_API_BASE = "https://instagramdl.the-zake.workers.dev/?url=";
+    
+    // Elements
+    const igInput = document.getElementById('igInput');
+    const fetchIgBtn = document.getElementById('fetchIgBtn');
     
     const fileInput = document.getElementById('fileInput');
     const uploadBtn = document.getElementById('uploadBtn');
+    
     const resultBox = document.getElementById('resultBox');
     const downloadLink = document.getElementById('downloadLink');
     const errorMessage = document.getElementById('errorMessage');
 
+    // Helper to show results
+    function showResult(url) {
+        errorMessage.textContent = "";
+        downloadLink.href = url;
+        downloadLink.textContent = "Click here to open the MP4 video";
+        resultBox.style.display = "block";
+    }
+
+    // Helper to show errors
+    function showError(msg) {
+        resultBox.style.display = "none";
+        errorMessage.textContent = msg;
+    }
+
+    // 1. Fetch Instagram Reel Logic
+    fetchIgBtn.addEventListener('click', async () => {
+        const url = igInput.value.trim();
+        
+        if (!url) {
+            showError("Please paste an Instagram URL first.");
+            return;
+        }
+
+        fetchIgBtn.disabled = true;
+        fetchIgBtn.textContent = "Fetching...";
+        showError("");
+
+        try {
+            const response = await fetch(IG_API_BASE + encodeURIComponent(url));
+            const data = await response.json();
+
+            // Check if success and media exists
+            if (data.success && data.data && data.data.medias) {
+                // Find the MP4 video object
+                const videoMedia = data.data.medias.find(m => m.type === 'video' && m.extension === 'mp4');
+                
+                if (videoMedia && videoMedia.url) {
+                    showResult(videoMedia.url);
+                } else {
+                    showError("Could not find an MP4 video in this Instagram link.");
+                }
+            } else {
+                showError("API failed to extract data. Make sure it's a valid public reel.");
+            }
+        } catch (error) {
+            console.error("IG Fetch Error:", error);
+            showError("Network error. Check browser console or API CORS settings.");
+        } finally {
+            fetchIgBtn.disabled = false;
+            fetchIgBtn.textContent = "Get MP4 URL";
+        }
+    });
+
+    // 2. Upload Local File Logic
     uploadBtn.addEventListener('click', async () => {
         const file = fileInput.files[0];
         
         if (!file) {
-            errorMessage.textContent = "Please select a file first.";
+            showError("Please select a file first.");
             return;
         }
 
-        // Reset UI
-        errorMessage.textContent = "";
-        resultBox.style.display = "none";
         uploadBtn.disabled = true;
         uploadBtn.textContent = "Uploading...";
+        showError("");
 
-        // Build FormData exactly like the curl command
         const formData = new FormData();
         formData.append("files[]", file);
         formData.append("expiry", "-1");
 
         try {
-            const response = await fetch(API_URL, {
+            const response = await fetch(UPLOAD_API_URL, {
                 method: "POST",
                 body: formData
             });
-
             const data = await response.json();
 
             if (data.success && data.files && data.files.length > 0) {
-                const fileUrl = data.files[0].url;
-                downloadLink.href = fileUrl;
-                downloadLink.textContent = fileUrl;
-                resultBox.style.display = "block";
+                showResult(data.files[0].url);
             } else {
-                throw new Error("Upload failed. Unexpected API response.");
+                showError("Upload failed. Unexpected API response.");
             }
         } catch (error) {
             console.error("Upload error:", error);
-            errorMessage.textContent = "Error uploading file. Check console or CORS settings.";
+            showError("Error uploading file. Check console or CORS settings.");
         } finally {
             uploadBtn.disabled = false;
-            uploadBtn.textContent = "Upload File";
+            uploadBtn.textContent = "Upload to Worker API";
         }
     });
 </script>
