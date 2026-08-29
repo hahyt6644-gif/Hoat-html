@@ -46,7 +46,7 @@
             font-weight: bold;
         }
         button:disabled { background: #cccccc; cursor: not-allowed; }
-        .status { margin-top: 15px; font-size: 14px; font-weight: 500; color: #555; }
+        .status { margin-top: 15px; font-size: 14px; font-weight: 500; color: #0056b3; }
         .result-box {
             margin-top: 20px;
             padding: 15px;
@@ -87,6 +87,9 @@
     const IG_API_BASE = "https://instagramdl.the-zake.workers.dev/?url=";
     const UPLOAD_API_URL = "https://file-host.itz-dev.workers.dev/upload";
     
+    // Using the AllOrigins raw proxy to prevent redirect errors with binary data
+    const CORS_PROXY = "https://api.allorigins.win/raw?url="; 
+    
     const igInput = document.getElementById('igInput');
     const processBtn = document.getElementById('processBtn');
     const statusText = document.getElementById('statusText');
@@ -117,9 +120,11 @@
         processBtn.disabled = true;
 
         try {
-            // STEP 1: Get Instagram MP4 URL from your scraper
+            // STEP 1: Get Instagram MP4 URL from your scraper (Via Proxy)
             updateStatus("Step 1: Fetching Reel data...");
-            const igRes = await fetch(IG_API_BASE + encodeURIComponent(url));
+            const scraperUrl = IG_API_BASE + encodeURIComponent(url);
+            
+            const igRes = await fetch(CORS_PROXY + encodeURIComponent(scraperUrl));
             const igData = await igRes.json();
 
             if (!igData.success || !igData.data || !igData.data.medias) {
@@ -132,14 +137,14 @@
             }
             const mp4Url = videoMedia.url;
 
-            // STEP 2: Download the MP4 into the browser as a Blob
+            // STEP 2: Download the MP4 into the browser as a Blob (Via Proxy)
             updateStatus("Step 2: Downloading video from Instagram...");
-            const videoRes = await fetch(mp4Url);
-            if (!videoRes.ok) throw new Error("Failed to download video blob (CORS or network issue).");
+            const videoRes = await fetch(CORS_PROXY + encodeURIComponent(mp4Url));
+            if (!videoRes.ok) throw new Error("Failed to download video blob through proxy.");
             const videoBlob = await videoRes.blob();
 
             // STEP 3: Upload the Blob to your Worker API
-            updateStatus("Step 3: Uploading to Worker API...");
+            updateStatus("Step 3: Uploading to your Worker API...");
             const formData = new FormData();
             formData.append("files[]", videoBlob, "reels.mp4");
             formData.append("expiry", "-1");
@@ -166,7 +171,7 @@
 
         } catch (error) {
             console.error(error);
-            showError(error.message || "An unexpected error occurred.");
+            showError("Network/CORS error: " + (error.message || "Failed to fetch."));
         }
     });
 </script>
